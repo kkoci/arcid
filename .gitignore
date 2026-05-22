@@ -1,0 +1,6 @@
+# Ignore everything …
+/*
+
+# … keep only README and this file for the initial push.
+!README.md
+!.gitignore
