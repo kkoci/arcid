@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schemas.phala.network/cvm-config-v1.json",
+  "name": "arcid-agent",
+  "description": "ArcID TEE-attested agent — runs the Sentiment demo agent inside Intel TDX",
+  "image": "ghcr.io/arcid/agent:0.1.0",
+  "platform": {
+    "tee": "tdx",
+    "min_cpu": 2,
+    "min_memory_mb": 4096,
+    "min_disk_gb": 10
+  },
+  "compose": {
+    "services": {
+      "backend": {
+        "image": "ghcr.io/arcid/agent:0.1.0",
+        "command": ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"],
+        "ports": [{ "container": 8000, "host": 8000, "protocol": "tcp" }],
+        "environment": {
+          "PROTOTYPE_MODE": "false",
+          "ARC_RPC_URL": "${ARC_RPC_URL}",
+          "ARC_CHAIN_ID": "${ARC_CHAIN_ID}",
+          "DEPLOYER_PRIVATE_KEY": "${DEPLOYER_PRIVATE_KEY}",
+          "ARCID_REGISTRY_ADDRESS": "${ARCID_REGISTRY_ADDRESS}",
+          "USDC_TOKEN_ADDRESS": "${USDC_TOKEN_ADDRESS}",
+          "CIRCLE_API_KEY": "${CIRCLE_API_KEY}",
+          "CIRCLE_WALLET_SET_ID": "${CIRCLE_WALLET_SET_ID}",
+          "CIRCLE_ENTITY_SECRET": "${CIRCLE_ENTITY_SECRET}",
+          "PAYMASTER_URL": "${PAYMASTER_URL}",
+          "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+          "PHALA_CVM_ENDPOINT": "http://127.0.0.1:9000",
+          "POLY_API_KEY": "${POLY_API_KEY}",
+          "POLY_API_SECRET": "${POLY_API_SECRET}",
+          "POLY_API_PASSPHRASE": "${POLY_API_PASSPHRASE}"
+        },
+        "volumes": [
+          { "host": "/var/lib/arcid/data", "container": "/data" }
+        ],
+        "restart": "unless-stopped"
+      }
+    }
+  },
+  "attestation": {
+    "expose_endpoint": true,
+    "endpoint_path": "/attestation/quote",
+    "report_data_source": "request",
+    "comment": "report_data is supplied per request by the agent — it commits to keccak(agentAddress ‖ nonce). The mrtd measurement is fixed by the image hash and PCR set."
+  },
+  "secrets": {
+    "DEPLOYER_PRIVATE_KEY": { "scope": "cvm_only" },
+    "CIRCLE_API_KEY":       { "scope": "cvm_only" },
+    "CIRCLE_ENTITY_SECRET": { "scope": "cvm_only" },
+    "ANTHROPIC_API_KEY":    { "scope": "cvm_only" },
+    "POLY_API_SECRET":      { "scope": "cvm_only" },
+    "POLY_API_PASSPHRASE":  { "scope": "cvm_only" }
+  },
+  "network": {
+    "egress_allow": [
+      "rpc.testnet.arc.network",
+      "rpc.arc.network",
+      "api.circle.com",
+      "paymaster.circle.com",
+      "clob.polymarket.com",
+      "api.anthropic.com"
+    ],
+    "ingress": [{ "port": 8000, "protocol": "https" }]
+  }
+}

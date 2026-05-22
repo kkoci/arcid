@@ -1,0 +1,25 @@
+{
+  "name": "arcid",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ArcID — The Verifiable Agent Layer for Arc. TEE-attested agent identity registry on Circle Arc.",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test:contracts": "hardhat test",
+    "deploy:arc": "hardhat run scripts/deploy_arc.js --network arcTestnet",
+    "deploy:local": "hardhat run scripts/deploy_arc.js --network hardhat",
+    "deploy:dev": "hardhat run scripts/deploy_arc.js --network localhost",
+    "node": "hardhat node",
+    "backend:dev": "python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000",
+    "backend:prod": "python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 2",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.0.2",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.0"
+  },
+  "license": "MIT"
+}

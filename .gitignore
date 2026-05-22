@@ -1,6 +1,48 @@
-# Ignore everything …
-/*
-
-# … keep only README and this file for the initial push.
+# Markdown files (keep README)
+*.md
+*.markdown
 !README.md
-!.gitignore
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# OS / system
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temp / editor
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-workspace
+
+# Hidden files & directories (ignore .claude, .pytest_cache, .env, etc.)
+.claude/
+.pytest_cache/
+.env
+.env.*
+!.env.example  # Keep the example file tracked
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Build output
+dist/
+build/
+*.egg-info/
