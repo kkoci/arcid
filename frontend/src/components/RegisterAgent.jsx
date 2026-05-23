@@ -26,8 +26,7 @@ export default function RegisterAgent({ onRegister }) {
     <section className="rounded-lg border border-arc-panel bg-arc-panel/60 backdrop-blur p-4 flex flex-col gap-3">
       <h2 className="text-xl font-semibold">Register Your Agent</h2>
       <p className="text-sm text-arc-dim">
-        Generates a TDX attestation inside the prototype CVM, submits the DCAP quote to
-        the ArcID Registry on Arc, mints a Circle Programmable Wallet, and binds it on-chain.
+        Generates a synthetic DCAP attestation quote (prototype mode), submits to the ArcID Registry on local Hardhat node, provisions a mock Circle wallet, and binds it on-chain.
       </p>
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
