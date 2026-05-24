@@ -440,6 +440,14 @@ The Polymarket V2 CLOB attribution bridge is implemented (`backend/bridge/polyma
 
 ---
 
+## Live deployment notes
+
+The public backend runs on Fly.io (`https://arcid.fly.dev`). Fly.io auto-suspends idle machines to save resources and wakes them on the first incoming request. The first request after an idle period takes 2–5 seconds while the machine boots — subsequent requests are fast.
+
+The frontend leaderboard polls `/agents` every 8 seconds, which is enough to wake the backend automatically. If you open the frontend and the leaderboard takes a few seconds to load, that is normal — just wait and it will come back on its own.
+
+---
+
 ## Known limitations (prototype)
 
 1. **Simplified DCAP verifier is not Sybil-resistant.** Anyone can craft a structurally valid quote that passes. The full Automata verifier closes this.
