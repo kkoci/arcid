@@ -269,7 +269,7 @@ arcid agents order 0x532624 --market "Will X happen?" --side YES --size 1
 Point at any backend with `--endpoint`:
 
 ```powershell
-arcid --endpoint https://your-backend.fly.dev agents list
+arcid --endpoint https://arcid-xsjx.onrender.com agents list
 ```
 
 Use `--json` before any sub-command for raw JSON output (useful for scripting):
@@ -354,7 +354,7 @@ All settings live in `.env` (copy from `.env.example`).
 | `PHALA_CVM_ENDPOINT` | _(empty → mock attestation)_ | `http://127.0.0.1:9000` inside CVM |
 | `POLY_API_KEY` / `SECRET` / `PASSPHRASE` | _(empty → mock builder)_ | Polymarket V2 CLOB credentials — see note below |
 | `ALLOWED_ORIGINS` | `*` | `https://your-frontend.vercel.app` |
-| `VITE_API_BASE_URL` | _(empty → `/api` via Vite proxy)_ | `https://your-backend.fly.dev` |
+| `VITE_API_BASE_URL` | _(empty → `/api` via Vite proxy)_ | `https://arcid-xsjx.onrender.com` |
 
 ---
 
@@ -405,30 +405,28 @@ arcid --endpoint https://<your-cvm-url> register --name "Phala Test"
 
 ---
 
-## Deploying to Fly.io + Vercel (production without Phala)
+## Deploying to Render + Vercel (production without Phala)
 
-The public deployment runs the backend on Fly.io (synthetic attestation, all other integrations real) and the frontend on Vercel.
+The public deployment runs the backend on Render (synthetic attestation, all other integrations real) and the frontend on Vercel.
 
-### Backend — Fly.io
+### Backend — Render
 
-```powershell
-fly auth login
-fly launch --dockerfile phala/Dockerfile --no-deploy
-# set secrets
-fly secrets set DEPLOYER_PRIVATE_KEY=0x... CIRCLE_API_KEY=... CIRCLE_ENTITY_SECRET=... CIRCLE_WALLET_SET_ID=...
-# set env vars
-fly secrets set PROTOTYPE_MODE=false ARC_RPC_URL=https://rpc.testnet.arc.network ARC_CHAIN_ID=5042002
-fly deploy --dockerfile phala/Dockerfile
-```
+1. Go to `render.com` → **New** → **Web Service**
+2. Connect your GitHub repo (`kkoci/arcid`)
+3. Set **Dockerfile Path** to `phala/Dockerfile`
+4. Add all environment variables in Render's env vars section (see Configuration reference above)
+5. Deploy — Render builds from the Dockerfile and serves on a public URL
+
+Live backend: `https://arcid-xsjx.onrender.com`
 
 ### Frontend — Vercel
 
-```powershell
-# build with the Fly.io backend URL
-$env:VITE_API_BASE_URL = "https://your-app.fly.dev"
-npm run frontend:build
-# drag frontend/dist/ into vercel.com/new or use the Vercel CLI
-```
+1. Go to `vercel.com` → **New Project** → import `kkoci/arcid` from GitHub
+2. Select **frontend** as the root directory
+3. Add environment variable: `VITE_API_BASE_URL=https://arcid-xsjx.onrender.com`
+4. Deploy
+
+Live frontend: `https://arcid-jade.vercel.app`
 
 ---
 
@@ -442,7 +440,7 @@ The Polymarket V2 CLOB attribution bridge is implemented (`backend/bridge/polyma
 
 ## Live deployment notes
 
-The public backend runs on Fly.io (`https://arcid.fly.dev`). Fly.io auto-suspends idle machines to save resources and wakes them on the first incoming request. The first request after an idle period takes 2–5 seconds while the machine boots — subsequent requests are fast.
+The public backend runs on Render (`https://arcid-xsjx.onrender.com`). Render's free tier auto-suspends idle instances after 15 minutes of inactivity and wakes them on the first incoming request. The first request after an idle period takes ~30 seconds while the instance boots — subsequent requests are fast.
 
 The frontend leaderboard polls `/agents` every 8 seconds, which is enough to wake the backend automatically. If you open the frontend and the leaderboard takes a few seconds to load, that is normal — just wait and it will come back on its own.
 
