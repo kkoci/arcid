@@ -1,0 +1,18 @@
+services:
+  backend:
+    image: kkoci/arcid-agent:0.1.0
+    ports:
+      - "8000:8000"
+    environment:
+      PROTOTYPE_MODE: "false"
+      ARC_RPC_URL: "https://rpc.testnet.arc.network"
+      ARC_CHAIN_ID: "5042002"
+      ARC_NETWORK: "ARC-TESTNET"
+      USDC_TOKEN_ADDRESS: "0x3600000000000000000000000000000000000000"
+      ARCID_REGISTRY_ADDRESS: "0xa3705BFBDD53e2DB059698EE0Ac7093a70d81b9E"
+      DCAP_VERIFIER_ADDRESS: "0xBB2835fC4d189340a98084A50DD0B36b4Ff50Ca2"
+      PAYMASTER_URL: "https://paymaster.circle.com/v1/arc-testnet"
+      BACKEND_HOST: "0.0.0.0"
+      BACKEND_PORT: "8000"
+      PHALA_CVM_ENDPOINT: "http://127.0.0.1:9000"
+    restart: unless-stopped

@@ -13,7 +13,7 @@ export default function App() {
       <Header config={config} />
 
       <div className="grid lg:grid-cols-[1fr,1.2fr] gap-6 items-start">
-        <RegisterAgent onRegister={registerAgent} />
+        <RegisterAgent onRegister={registerAgent} prototypeMode={config?.modes?.prototype_mode ?? true} />
         <Leaderboard
           agents={agents}
           loading={loading}

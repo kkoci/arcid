@@ -2,7 +2,7 @@
   "$schema": "https://schemas.phala.network/cvm-config-v1.json",
   "name": "arcid-agent",
   "description": "ArcID TEE-attested agent — runs the Sentiment demo agent inside Intel TDX",
-  "image": "ghcr.io/arcid/agent:0.1.0",
+  "image": "kkoci/arcid-agent:0.1.0",
   "platform": {
     "tee": "tdx",
     "min_cpu": 2,
@@ -12,7 +12,7 @@
   "compose": {
     "services": {
       "backend": {
-        "image": "ghcr.io/arcid/agent:0.1.0",
+        "image": "kkoci/arcid-agent:0.1.0",
         "command": ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"],
         "ports": [{ "container": 8000, "host": 8000, "protocol": "tcp" }],
         "environment": {

@@ -174,6 +174,9 @@ arcid/
 │   │   └── circle_wallets.py      Circle Programmable Wallets adapter
 │   └── bridge/
 │       └── polymarket.py          Polymarket V2 CLOB adapter
+├── cli/
+│   ├── arcid_cli.py               CLI tool — wraps the backend REST API
+│   └── pyproject.toml             pip installable as arcid-cli
 ├── frontend/
 │   └── src/
 │       ├── App.jsx                Layout, header (chain ID, prototype badge), footer
@@ -193,11 +196,12 @@ arcid/
 │   └── conftest.py                Forces PROTOTYPE_MODE=true, adds repo root to path
 ├── scripts/
 │   └── deploy_arc.js              Hardhat deploy → writes deployments/<network>.json
+├── docker-compose.yml             Run backend from Docker Hub image (no Phala)
 ├── hardhat.config.js
 ├── package.json
 ├── .env.example                   All env vars with prototype defaults and prod comments
-├── RUN.md                         Step-by-step run guide (local + production)
-├── PRODUCTION.md                  Production deployment checklist
+├── RUN.md                         Step-by-step run guide (local + production + CLI)
+├── CLI_CODE_GUIDE.md              CLI code walkthrough — what, how, when, where
 └── BUILD_EXPLANATION.md           Full design rationale, decisions table, known cracks
 ```
 
@@ -239,7 +243,42 @@ npm run frontend:dev
 
 Visit **http://localhost:5173**. Register an agent, watch the TEE Verified card appear. Click **Place demo order** and watch the USDC fee tick up on the leaderboard.
 
-The Swagger UI is at **http://localhost:8000/docs**. On `POST /register`, leave `agent_private_key` blank — the backend generates a fresh key automatically.
+The Swagger UI is at **http://localhost:8000/docs**.
+
+---
+
+## CLI
+
+A thin command-line wrapper around the backend API. Install once, use from any terminal.
+
+```powershell
+pip install -e cli\
+```
+
+```powershell
+arcid health
+arcid config
+arcid register --name "My Agent"
+arcid agents list
+arcid agents inspect 0x532624        # prefix is enough
+arcid agents fees 0x532624
+arcid agents decide 0x532624 --market "Will X happen?" --signal "bull signal" --signal "another signal"
+arcid agents order 0x532624 --market "Will X happen?" --side YES --size 1
+```
+
+Point at any backend with `--endpoint`:
+
+```powershell
+arcid --endpoint https://your-backend.fly.dev agents list
+```
+
+Use `--json` before any sub-command for raw JSON output (useful for scripting):
+
+```powershell
+$id = (arcid --json register --name "Bot" | ConvertFrom-Json).agent_id
+```
+
+See [`CLI_CODE_GUIDE.md`](./CLI_CODE_GUIDE.md) for the full code walkthrough.
 
 ---
 
@@ -253,8 +292,6 @@ Each external dependency has two implementations behind the same Python interfac
 | `create_wallet_for_agent()` | `CIRCLE_API_KEY` + `CIRCLE_WALLET_SET_ID` set, `PROTOTYPE_MODE=false` | `keccak("arcid-mock-wallet" ‖ agentId)` → deterministic address |
 | `place_attributed_order()` | Polymarket credentials set, `PROTOTYPE_MODE=false` | Drives `MockPolymarketBuilder` on the Hardhat node — real ERC20 transfer, real on-chain fee accumulation |
 | `run_decision_cycle()` | `ANTHROPIC_API_KEY` set | Keyword-counting sentiment fallback |
-
-The biggest win: the mock Polymarket builder pays USDC fees via a real ERC20 transfer on the local chain, so the leaderboard's "fees earned" counter is a real balance, not a fabricated number.
 
 ---
 
@@ -271,8 +308,6 @@ The biggest win: the mock Polymarket builder pays USDC fees via a real ERC20 tra
 | `POST` | `/agents/{id}/order` | Place attributed Polymarket order. Body: `{ market_question, side: YES|NO, size_usdc }` |
 | `GET` | `/agents/{id}/fees` | Cumulative USDC builder fees |
 
-The `/config` endpoint is the fastest way to verify a deployment — confirm `prototype_mode: false` and all three `real_*` flags are `true` before going live.
-
 ---
 
 ## Smart contracts
@@ -282,70 +317,132 @@ The `/config` endpoint is the fastest way to verify a deployment — confirm `pr
 The canonical registry. Key design calls:
 
 - **`agentId = keccak256(abi.encode(mrtd, reportData, attestedSigner))`** — three-field hash ties the ID to code + hardware + key simultaneously
-- **Idempotency** — re-submitting a known attestation returns the existing ID without charging again; autonomous agents that crash and restart don't drain USDC
-- **Sponsored quota** — an on-chain counter tracks gas-sponsored registrations so the leaderboard badge is verifiable, not just a claim
-- **`bindWallet` is owner-only** — only the registry operator (the backend) can bind a Circle wallet to an agent ID; the agent itself cannot claim a wallet it doesn't hold
-- **Custom errors** — `InvalidAttestation`, `InsufficientFee`, `WalletAlreadyBound`, `UnknownAgent` — saves gas on revert paths vs `require` strings
+- **Idempotency** — re-submitting a known attestation returns the existing ID without charging again
+- **Sponsored quota** — on-chain counter tracks gas-sponsored registrations
+- **`bindWallet` is owner-only** — only the registry operator can bind a Circle wallet to an agent ID
+- **Custom errors** — `InvalidAttestation`, `InsufficientFee`, `WalletAlreadyBound`, `UnknownAgent`
 - **`listAgents(offset, limit)`** — paginated struct array for cheap leaderboard reads
 
 ### `DCAPVerifier.sol`
 
-Lightweight structural verifier. Validates the TDX v4 header (version, key type, TEE type), checks quote length and mrtd non-zero, and recovers the agent's signer via `ecrecover(reportData, v, r, s)`. Cost: ~5K gas. The full Automata verifier (~2M gas) is the Day 2 port; same external interface, drop-in replacement.
+Lightweight structural verifier. Validates the TDX v4 header, checks quote length and mrtd non-zero, and recovers the agent's signer via `ecrecover`. Cost: ~5K gas. The full Automata verifier (~2M gas) is the Day 2 port.
 
 ### `MockPolymarketBuilder.sol`
 
-Implements `IPolymarketBuilder`. Accepts `registerBuilder(bytes32, address)` and `reportAttributedFill(bytes32, uint256)`. On each fill it pulls USDC from the caller and forwards it to the agent's registered wallet. This is what makes the prototype leaderboard show real non-zero fees without real Polymarket liquidity.
+Implements `IPolymarketBuilder`. On each attributed fill it pulls USDC from the caller and forwards it to the agent's registered wallet — makes the prototype leaderboard show real non-zero fees.
 
 ---
 
 ## Configuration reference
 
-All settings live in `.env` (copy from `.env.example`). The backend reads them via Pydantic Settings at startup.
+All settings live in `.env` (copy from `.env.example`).
 
 | Variable | Default | Production value |
 |----------|---------|-----------------|
 | `PROTOTYPE_MODE` | `true` | `false` |
 | `ARC_RPC_URL` | `http://127.0.0.1:8545` | `https://rpc.testnet.arc.network` |
-| `ARC_CHAIN_ID` | `31337` | `421614` (testnet) |
-| `ARC_NETWORK` | `ARC-TESTNET` | `ARC-TESTNET` or `ARC` |
-| `DEPLOYER_PRIVATE_KEY` | Hardhat default key | Dedicated funded key (secrets manager) |
-| `USDC_TOKEN_ADDRESS` | Auto from deploy | Real USDC address on Arc |
+| `ARC_CHAIN_ID` | `31337` | `5042002` |
+| `ARC_NETWORK` | `ARC-TESTNET` | `ARC-TESTNET` |
+| `DEPLOYER_PRIVATE_KEY` | Hardhat default key | Dedicated funded wallet key |
+| `USDC_TOKEN_ADDRESS` | Auto from deploy | `0x3600000000000000000000000000000000000000` |
+| `ARCID_REGISTRY_ADDRESS` | Auto from deploy | From `deployments/arcTestnet.json` |
 | `CIRCLE_API_KEY` | _(empty → mock)_ | Circle developer key |
 | `CIRCLE_WALLET_SET_ID` | _(empty → mock)_ | Circle wallet set ID |
-| `CIRCLE_ENTITY_SECRET` | _(empty → mock)_ | Circle entity secret |
-| `ANTHROPIC_API_KEY` | _(empty → keyword fallback)_ | Your Anthropic key |
-| `PHALA_CLOUD_API_KEY` | _(empty → mock attestation)_ | Phala Cloud key |
+| `CIRCLE_ENTITY_SECRET` | _(empty → mock)_ | Circle entity secret (32-byte hex) |
+| `ANTHROPIC_API_KEY` | _(empty → keyword fallback)_ | Anthropic key — optional, only needed for real sentiment decisions |
+| `PHALA_CLOUD_API_KEY` | _(empty → mock attestation)_ | Phala Cloud key — optional, see Phala section below |
 | `PHALA_CVM_ENDPOINT` | _(empty → mock attestation)_ | `http://127.0.0.1:9000` inside CVM |
-| `POLY_API_KEY` / `SECRET` / `PASSPHRASE` | _(empty → mock builder)_ | Polymarket V2 CLOB credentials |
-| `ALLOWED_ORIGINS` | `*` | `https://arcid.xyz,https://www.arcid.xyz` |
-| `VITE_API_BASE_URL` | _(empty → `/api` via Vite proxy)_ | `https://api.arcid.xyz` |
+| `POLY_API_KEY` / `SECRET` / `PASSPHRASE` | _(empty → mock builder)_ | Polymarket V2 CLOB credentials — see note below |
+| `ALLOWED_ORIGINS` | `*` | `https://your-frontend.vercel.app` |
+| `VITE_API_BASE_URL` | _(empty → `/api` via Vite proxy)_ | `https://your-backend.fly.dev` |
 
 ---
 
-## Going to production
+## Phala TDX deployment (optional — real hardware attestation)
 
-Full procedure in [`PRODUCTION.md`](./PRODUCTION.md). The short version:
+Phala Cloud runs the backend inside a genuine Intel TDX enclave, making the DCAP attestation hardware-rooted rather than synthetic. The backend automatically detects Phala credentials and switches from mock to real attestation — no code changes needed.
 
-```bash
-# 1. Fill .env with real credentials, set PROTOTYPE_MODE=false
-# 2. Deploy contracts to Arc testnet
-npm run deploy:arc                # → writes deployments/arcTestnet.json
+### Step 1 — build and push the Docker image
 
-# 3. Build frontend
-VITE_API_BASE_URL=https://api.arcid.xyz npm run frontend:build
-# Deploy frontend/dist/ to Vercel / Cloudflare Pages / S3
-
-# 4. Start production backend (behind nginx for TLS)
-npm run backend:prod              # uvicorn --workers 2, no --reload
+```powershell
+docker build -t YOUR_DOCKERHUB_USER/arcid-agent:0.1.0 -f phala/Dockerfile .
+docker push YOUR_DOCKERHUB_USER/arcid-agent:0.1.0
 ```
 
-Verify at `/config` that all `real_*` flags are `true` before announcing.
+### Step 2 — deploy on Phala Cloud
+
+Go to `cloud.phala.network`, create a new CVM, paste `docker-compose.yml` in the editor (update the image name to match your Docker Hub), then fill in the two sections below.
+
+**Encrypted Secrets** (paste in Phala's Secrets section — encrypted inside TDX, never logged):
+
+```
+DEPLOYER_PRIVATE_KEY=0x...
+CIRCLE_API_KEY=...
+CIRCLE_ENTITY_SECRET=...
+CIRCLE_WALLET_SET_ID=...
+ANTHROPIC_API_KEY=...
+```
+
+**Environment variables** (plain env section — already set in `docker-compose.yml` but override here if needed):
+
+```
+PROTOTYPE_MODE=false
+ARC_RPC_URL=https://rpc.testnet.arc.network
+ARC_CHAIN_ID=5042002
+ARC_NETWORK=ARC-TESTNET
+USDC_TOKEN_ADDRESS=0x3600000000000000000000000000000000000000
+ARCID_REGISTRY_ADDRESS=0xa3705BFBDD53e2DB059698EE0Ac7093a70d81b9E
+DCAP_VERIFIER_ADDRESS=0xBB2835fC4d189340a98084A50DD0B36b4Ff50Ca2
+PAYMASTER_URL=https://paymaster.circle.com/v1/arc-testnet
+```
+
+### Step 3 — test
+
+```powershell
+arcid --endpoint https://<your-cvm-url> health
+arcid --endpoint https://<your-cvm-url> register --name "Phala Test"
+```
+
+---
+
+## Deploying to Fly.io + Vercel (production without Phala)
+
+The public deployment runs the backend on Fly.io (synthetic attestation, all other integrations real) and the frontend on Vercel.
+
+### Backend — Fly.io
+
+```powershell
+fly auth login
+fly launch --dockerfile phala/Dockerfile --no-deploy
+# set secrets
+fly secrets set DEPLOYER_PRIVATE_KEY=0x... CIRCLE_API_KEY=... CIRCLE_ENTITY_SECRET=... CIRCLE_WALLET_SET_ID=...
+# set env vars
+fly secrets set PROTOTYPE_MODE=false ARC_RPC_URL=https://rpc.testnet.arc.network ARC_CHAIN_ID=5042002
+fly deploy --dockerfile phala/Dockerfile
+```
+
+### Frontend — Vercel
+
+```powershell
+# build with the Fly.io backend URL
+$env:VITE_API_BASE_URL = "https://your-app.fly.dev"
+npm run frontend:build
+# drag frontend/dist/ into vercel.com/new or use the Vercel CLI
+```
+
+---
+
+## Polymarket attribution (nice to have)
+
+The Polymarket V2 CLOB attribution bridge is implemented (`backend/bridge/polymarket.py`) and the agent ID works as a builder code out of the box. Set `POLY_API_KEY`, `POLY_API_SECRET`, and `POLY_API_PASSPHRASE` from your Polymarket account to enable live attributed orders.
+
+**Note:** Polymarket trading is currently geo-restricted in many regions including the US, UK, and most of the EU. If you are in a blocked region, the backend falls back to synthetic orders automatically — the attribution architecture is unchanged, just the venue is simulated.
 
 ---
 
 ## Known limitations (prototype)
 
-1. **Simplified DCAP verifier is not Sybil-resistant.** Anyone can craft a structurally valid quote that passes. The full Automata verifier (requires Intel PCK cert chain) closes this and is the Day 2 task.
+1. **Simplified DCAP verifier is not Sybil-resistant.** Anyone can craft a structurally valid quote that passes. The full Automata verifier closes this.
 2. **Single deployer key** acts as registry owner, wallet binder, and Polymarket router. Production should compartmentalise these into separate roles.
 3. **No rate-limiting on `POST /register`.** The $0.10 fee alone doesn't prevent spam if the sponsored quota is non-zero.
 4. **Mock Circle wallet private key is derivable** from the `agentId`. Do not use the mock wallet client with real value.

@@ -1,0 +1,17 @@
+{
+  "network": "arcTestnet",
+  "chainId": 5042002,
+  "deployer": "0x4812fC05e79ddc616346d10A8826B2bdf5e6ab20",
+  "timestamp": 1779618442,
+  "addresses": {
+    "USDC": "0x3600000000000000000000000000000000000000",
+    "DCAPVerifier": "0xBB2835fC4d189340a98084A50DD0B36b4Ff50Ca2",
+    "ArcIDRegistry": "0xa3705BFBDD53e2DB059698EE0Ac7093a70d81b9E",
+    "MockPolymarketBuilder": null
+  },
+  "config": {
+    "registrationFee": "100000",
+    "sponsoredQuota": "100",
+    "feeRecipient": "0x4812fC05e79ddc616346d10A8826B2bdf5e6ab20"
+  }
+}

@@ -51,7 +51,11 @@ class CircleWalletClient:
         if self.prototype or not settings.use_real_circle:
             wallet = self._create_mock(agent_id_hex)
         else:
-            wallet = await self._create_real(agent_id_hex)
+            try:
+                wallet = await self._create_real(agent_id_hex)
+            except Exception as exc:
+                logger.warning("Circle API failed (%s) — falling back to mock wallet.", exc)
+                wallet = self._create_mock(agent_id_hex)
         self._cache[agent_id_hex] = wallet
         return wallet
 
@@ -76,36 +80,33 @@ class CircleWalletClient:
     # ---- real ----
 
     async def _create_real(self, agent_id_hex: str) -> CircleWallet:
-        import httpx  # type: ignore
+        from circle.web3 import developer_controlled_wallets, utils  # type: ignore
+
+        client = utils.init_developer_controlled_wallets_client(
+            api_key=settings.circle_api_key,
+            entity_secret=settings.circle_entity_secret,
+        )
+        wallets_api = developer_controlled_wallets.WalletsApi(client)
 
         idempotency_key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"arcid:{agent_id_hex}"))
-        payload = {
+        req = developer_controlled_wallets.CreateWalletRequest.from_dict({
             "idempotencyKey": idempotency_key,
             "walletSetId": settings.circle_wallet_set_id,
             "blockchains": [settings.arc_network],
-            "accountType": "SCA",
+            "accountType": "EOA",
             "count": 1,
-            "metadata": [{"name": f"arcid-{agent_id_hex[:10]}"}],
-        }
-        headers = {
-            "Authorization": f"Bearer {settings.circle_api_key}",
-            "X-Entity-Secret": settings.circle_entity_secret or "",
-            "Content-Type": "application/json",
-        }
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.post(
-                "https://api.circle.com/v1/w3s/developer/wallets",
-                json=payload,
-                headers=headers,
-            )
-            r.raise_for_status()
-            wallet = r.json()["data"]["wallets"][0]
+        })
+        resp = wallets_api.create_wallet(req)
+        import json as _json
+        data = _json.loads(resp.model_dump_json())
+        wallet = data["data"]["wallets"][0]
+
         return CircleWallet(
             wallet_id=wallet["id"],
             address=wallet["address"],
             blockchain=wallet["blockchain"],
-            custody_type=wallet["accountType"],
-            state=wallet["state"],
+            custody_type=wallet.get("account_type", wallet.get("accountType", "EOA")),
+            state=wallet.get("state", "LIVE"),
             gas_sponsored=True,
         )
 
