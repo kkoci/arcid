@@ -1,7 +1,8 @@
-# Markdown files (keep README)
+# Markdown files (keep README and BUILD_EXPLANATION)
 *.md
 *.markdown
 !README.md
+!BUILD_EXPLANATION.md
 
 # Images
 *.png
